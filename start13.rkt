@@ -16,6 +16,7 @@
     [seqC (b1 : ExprC) (b2 : ExprC)] 
     [objC (ns : (listof symbol)) (es : (listof ExprC))]
     [msgC (o : ExprC) (n : symbol)] 
+    [ifzeroC (if : ExprC) (zero : ExprC) (nonzero : ExprC)]
     )
 
 (define (desugar [src : ExprS]) : ExprC 
@@ -127,78 +128,29 @@
         [msgC (o n) 
             (let ([obj (interp o env sto)]) 
                 (v*s (lookup-msg n (v*s-v obj)) (v*s-s obj)))] 
+        [ifzeroC (i z nz) 
+            (let ([theif (interp i env sto)]) 
+                (type-case Result theif
+                    [v*s (v-val s-val) 
+                        (let ([if-n (numV-n v-val)]) 
+                            (if (zero? if-n) 
+                                (interp z env s-val)
+                                (interp nz env s-val)))]
+                                ))] 
         ))
 
-(define (test content) (v*s-v (interp (desugar content) mt-env mt-store))) 
-(define (test$ content) (interp (desugar content) mt-env mt-store)) 
+(define (test t) (v*s-v (interp t mt-env mt-store))) 
+(test (numC 1))
+(test (ifzeroC (numC 0) (numC 1) (numC 2))) 
+(test (ifzeroC (numC -1) (numC 1) (numC 2))) 
 
-(define test0 (objS (list 'add1 'sub1) (list 
-    (lamS 'x (plusS (varS 'x) (numS 1))) 
-    (lamS 'x (plusS (varS 'x) (numS -1)))))) 
-(define test1 (appS (lamS 'x (msgS (varS 'x) 'add1 (numS 3))) test0))
-
-(test test1) 
-
-(define o-1
-    (lambda (m)
-        (case m
-            [(add1) (lambda (x) (+ x 1))]
-            [(sub1) (lambda (x) (- x 1))])))
-
-((o-1 'sub1) 5) 
-
-(define obj (objS (list 'add1) (list 
-    (lamS 'x (plusS (varS 'x) (varS 'y)))))) 
-(define objc (lamS 'y obj))
-(define obj3 (appS objc (numS 3)))
-(define obj4 (appS objc (numS 4)))
-(define test2 (msgS obj3 'add1 (numS 5)))
-; (test$ obj3)
-(test test2)
-(test (msgS obj4 'add1 (numS 6)))
-
-(define test4 (appS (appS (lamS 'x (lamS 'y (plusS (multS (varS 'x) (numS 0)) (varS 'y)))) (numS 4)) (numS 1))) 
-(test test4)
-
-(define obj2 (objS (list 'inc 'dec) (list 
-    (lamS '_ (setS 'x (plusS (varS 'x) (numS 1)))) 
-    (lamS '_ (setS 'x (plusS (varS 'x) (numS -1))))) 
-    ))
-(define obj2ctor (lamS 'x obj2)) 
-(define init (appS obj2ctor (numS 0))) 
-(define test5 
-    (appS (lamS 'o (seqS 
-        (msgS (varS 'o) 'dec (numS -2)) 
-        (msgS (varS 'o) 'dec (numS -2)) 
-        )) init))
-(test test5)
-
-(define rec (lamS 'x (appS (varS 'x) (varS 'x)))) 
-(define test6 (appS rec rec)) 
-; (test test6)
-
-(define o-self-core (objS (list 'first 'second) (list 
-    (lamS 'x (msgS (varS 'self) 'second (plusS (varS 'x) (numS 1))))
-    (lamS 'x (plusS (varS 'x) (numS 1))))))
-(define o-self (appS (lamS 'self (setS 'self o-self-core)) (numS 0)))
-(test (msgS o-self 'second (numS 5)))
-
-(define mt (objS (list 'add) (list 
-    (lamS '_ (numS 0)))))
-(define node (lamS 'v (lamS 'l (lamS 'r (objS (list 'add) (list 
-    (lamS '_ (plusS (plusS (varS 'v) (msgS (varS 'l) 'add (numS 0))) (msgS (varS 'r) 'add (numS 0))))))))))
-(define inner (appS (appS (appS (varS 'node) (numS 10)) 
-    (appS (appS (appS (varS 'node) (numS 5)) (varS 'mt)) (varS 'mt))) 
-    (appS (appS (appS (varS 'node) (numS 15)) 
-        (appS (appS (appS (varS 'node) (numS 6)) (varS 'mt)) (varS 'mt))) 
-        (varS 'mt)))) 
-(define a-tree (appS (appS (lamS 'node (lamS 'mt inner)) node) mt)) 
-(define test7 (msgS a-tree 'add (numS 0))) 
-(test test7)
-
-"---" 
-
-(define test8 (lamS 'add (seqS (seqS (numS 1) (setS 'add (numS 4))) (varS 'add)))) 
-
-(test (appS test8 (numS 2))) 
-
+; (define test0 (lamC 'x (plusC (varC 'x) )))
+"impl recursive in lambda itself"
+(define test0 (lamC 'self (lamC 'x (ifzeroC (varC 'x) (numC 0) 
+    (plusC (varC 'x) (appC (appC (varC 'self) (varC 'self)) (plusC (varC 'x) (numC -1)))))))) 
+(define (test1 x) (appC (appC test0 test0) x)) 
+(test (test1 (numC 0)))
+(test (test1 (numC 1)))
+(test (test1 (numC 2)))
+(test (test1 (numC 3)))
+(test (test1 (numC 4)))

@@ -22,4 +22,5 @@
 (new-loc)  
 (new-loc)  
 (new-loc)  
-(new-loc)  
+
+(letrec ([x x]) x)
